@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbit Cafe</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="rings"></div>
+<header class="top"><h1>ORBIT CAFE</h1><p id="tb"></p></header>
+<nav id="chips" class="chips"></nav>
+<main id="menu"><p class="msg">جاري تحميل المنيو...</p></main>
+<div id="bar" class="bar" hidden><button id="open"></button></div>
+
+<div id="sheet" class="sheet" hidden>
+  <div id="cartv">
+    <h2>طلبك</h2>
+    <ul id="lines"></ul>
+    <div class="tot"><span>الإجمالي</span><span id="total"></span></div>
+    <button id="send" class="main">إرسال الطلب</button>
+    <p id="err" class="err"></p>
+    <button id="back" class="ghost">رجوع للمنيو</button>
+  </div>
+  <div id="donev" class="done" hidden>
+    <h2>وصل طلبك</h2>
+    <p id="dmsg"></p>
+    <button id="more" class="main" style="margin-top:24px">طلب إضافي</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let T=new URLSearchParams(location.search).get('table');
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let items=[],cart={};
+
+const DEMO=typeof DEMO_MODE!=='undefined'&&DEMO_MODE;
+if(!T&&DEMO){
+  $('tb').innerHTML='وضع التجربة · ترابيزة رقم <select id="tsel">'+[1,2,3,4,5,6,7,8,9,10].map(n=>`<option>${n}</option>`).join('')+'</select>';
+  T='1';$('tsel').onchange=e=>{T=e.target.value};
+}else $('tb').textContent=T?'ترابيزة رقم '+T:'افتح الصفحة من باركود الترابيزة لإرسال طلبك';
+
+async function init(){
+  const {data,error}=await sb.from('menu_items').select('*').eq('available',true).order('sort');
+  if(error){$('menu').innerHTML='<p class="msg">تعذر تحميل المنيو. حدّث الصفحة.</p>';return}
+  items=data;render();
+}
+function row(i){
+  const q=cart[i.id]||0;
+  return `<div class="it" data-id="${i.id}">${i.image_url?`<img src="${esc(i.image_url)}" alt="">`:''}
+  <div class="nm">${esc(i.name)}<b>${i.price} ج.م</b></div>
+  <div class="qty">${q?`<button aria-label="إنقاص" onclick="chg(${i.id},-1)">−</button><span>${q}</span>`:''}<button aria-label="إضافة" onclick="chg(${i.id},1)">+</button></div></div>`;
+}
+function render(){
+  const cats=[...new Set(items.map(i=>i.category))];
+  $('chips').innerHTML=cats.map((c,k)=>`<a href="#c${k}">${esc(c)}</a>`).join('');
+  $('menu').innerHTML=cats.map((c,k)=>`<section id="c${k}"><h2 style="direction:ltr;text-align:left">${esc(c)}</h2>${items.filter(i=>i.category===c).map(row).join('')}</section>`).join('');
+  bar();
+}
+function chg(id,d){
+  cart[id]=Math.max(0,(cart[id]||0)+d);
+  const it=items.find(i=>i.id===id),el=document.querySelector(`[data-id="${id}"]`);
+  if(el)el.outerHTML=row(it);
+  bar();
+}
+function lines(){return items.filter(i=>cart[i.id]).map(i=>({name:i.name,price:i.price,qty:cart[i.id]}))}
+function sum(l){return l.reduce((a,x)=>a+x.qty*x.price,0)}
+function bar(){
+  const l=lines(),n=l.reduce((a,x)=>a+x.qty,0);
+  $('bar').hidden=!n;
+  $('open').textContent=`مراجعة الطلب (${n}) · ${sum(l)} ج.م`;
+}
+$('open').onclick=()=>{
+  const l=lines();
+  $('lines').innerHTML=l.map(x=>`<li><span style="direction:ltr">${x.qty} × ${esc(x.name)}</span><span>${x.qty*x.price} ج.م</span></li>`).join('');
+  $('total').textContent=sum(l)+' ج.م';
+  $('err').textContent='';$('send').disabled=!T;
+  if(!T)$('err').textContent='لا يمكن الإرسال بدون رقم الترابيزة. امسح باركود الترابيزة.';
+  $('cartv').hidden=false;$('donev').hidden=true;$('sheet').hidden=false;
+};
+$('back').onclick=()=>{$('sheet').hidden=true};
+$('send').onclick=async()=>{
+  const l=lines();if(!l.length||!T)return;
+  $('send').disabled=true;
+  const {error}=await sb.from('orders').insert({table_no:T,items:l,total:sum(l)});
+  if(error){$('send').disabled=false;$('err').textContent='لم يصل الطلب. حاول مرة أخرى.';return}
+  cart={};render();
+  $('dmsg').textContent='ترابيزة '+T+' · هيوصلك قريباً';
+  $('cartv').hidden=true;$('donev').hidden=false;
+};
+$('more').onclick=()=>{$('sheet').hidden=true};
+init();
+</script>
+</body>
+</html>

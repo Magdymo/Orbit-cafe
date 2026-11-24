@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Orbit Cafe - باركود الترابيزات</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+.ctl{display:grid;gap:8px;background:#fff;padding:12px;border-radius:12px;margin:10px 0}
+.ctl label{font-weight:700;font-size:14px}
+.ctl input{padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;direction:ltr}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px}
+.card{background:#fff;border:2px solid var(--deep);border-radius:16px;padding:14px;text-align:center;break-inside:avoid}
+.card h3{margin:0;font-size:20px;font-weight:900;letter-spacing:1px}
+.card .q{margin:10px auto;width:100%;max-width:170px}
+.card .q svg{width:100%;height:auto;display:block}
+.card b{display:block;font-size:26px;color:var(--deep)}
+.card small{opacity:.8}
+.hint{font-size:13px;opacity:.85}
+@media print{
+  body{background:#fff;padding:0}.rings,.top,.ctl,.noprint{display:none}
+  .wrap{max-width:none;padding:0}.cards{grid-template-columns:repeat(2,1fr);gap:10mm}
+}
+</style>
+</head>
+<body>
+<div class="rings noprint"></div>
+<div class="wrap">
+  <div class="top noprint" style="border-radius:12px;padding:14px 18px"><h1 style="font-size:26px">باركود الترابيزات</h1><p>اطبع الصفحة وحط كل باركود على ترابيزته</p></div>
+  <div class="ctl">
+    <label for="base">رابط صفحة المنيو</label>
+    <input id="base" type="url" placeholder="https://username.github.io/repo/index.html">
+    <p class="hint">بيتملى تلقائياً من مكان الصفحة دي، غيّره لو عندك دومين خاص.</p>
+    <div class="row2">
+      <div><label for="n">عدد الترابيزات</label><input id="n" type="number" min="1" max="100" value="10"></div>
+      <div><label for="cafe">اسم الكافيه على الكارت</label><input id="cafe" value="ORBIT CAFE"></div>
+    </div>
+    <button id="go" class="main" style="padding:12px">توليد الباركود</button>
+    <button id="pr" class="ghost" style="margin:0">طباعة</button>
+  </div>
+  <div id="cards" class="cards"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+$('base').value=location.href.split('#')[0].split('?')[0].replace(/qr\.html$/,'index.html');
+function svg(text){
+  const q=qrcode(0,'M');q.addData(text);q.make();
+  return q.createSvgTag({cellSize:6,margin:2,scalable:true});
+}
+function gen(){
+  const base=$('base').value.trim(),n=Math.min(100,Math.max(1,+$('n').value||1)),cafe=esc($('cafe').value);
+  if(!base){$('cards').innerHTML='<p class="msg">اكتب رابط المنيو أولاً.</p>';return}
+  let h='';
+  for(let i=1;i<=n;i++){
+    const u=base+(base.includes('?')?'&':'?')+'table='+i;
+    h+=`<div class="card"><h3>${cafe}</h3><div class="q">${svg(u)}</div><b>ترابيزة ${i}</b><small>امسح الباركود واطلب من مكانك</small></div>`;
+  }
+  $('cards').innerHTML=h;
+}
+$('go').onclick=gen;$('pr').onclick=()=>{gen();print()};
+gen();
+</script>
+</body>
+</html>

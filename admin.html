@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Orbit Cafe - الإدارة</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="rings"></div>
+
+<form id="login" class="login" hidden>
+  <h2>دخول الإدارة</h2>
+  <input id="em" type="email" placeholder="البريد الإلكتروني" autocomplete="username" required>
+  <input id="pw" type="password" placeholder="كلمة المرور" autocomplete="current-password" required>
+  <button>دخول</button>
+  <p id="lerr" class="err"></p>
+</form>
+
+<div id="app" class="wrap" hidden>
+  <div class="oh"><h2>Orbit Cafe</h2><button id="out">خروج</button></div>
+  <div class="tabs">
+    <button id="t1" class="on">الطلبات</button>
+    <button id="t2">المنيو</button>
+  </div>
+  <div id="pOrders"><div id="list"></div></div>
+  <div id="pMenu" hidden>
+    <form id="addf" class="add">
+      <input id="ac" list="dl" placeholder="القسم" required>
+      <input id="an" placeholder="اسم الصنف" required>
+      <input id="ap" type="number" min="0" placeholder="السعر" required>
+      <button>إضافة</button>
+    </form>
+    <datalist id="dl"></datalist>
+    <div id="mlist"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="menu-seed.js"></script>
+<script>
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ac,menu=[],chan;
+document.addEventListener('click',()=>{try{ac=ac||new AudioContext();ac.resume()}catch(e){}});
+function beep(){try{const o=ac.createOscillator();o.connect(ac.destination);o.frequency.value=880;o.start();o.stop(ac.currentTime+.4)}catch(e){}}
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1400)}
+
+async function start(){
+  const {data:{session}}=await sb.auth.getSession();
+  $('login').hidden=!!session;$('app').hidden=!session;
+  if(session){loadOrders();loadMenu();listen()}
+}
+$('login').onsubmit=async e=>{
+  e.preventDefault();$('lerr').textContent='';
+  const {error}=await sb.auth.signInWithPassword({email:$('em').value,password:$('pw').value});
+  if(error){$('lerr').textContent='البريد أو كلمة المرور غير صحيحة.';return}
+  start();
+};
+$('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
+function tab(n){$('pOrders').hidden=n!==1;$('pMenu').hidden=n!==2;$('t1').className=n===1?'on':'';$('t2').className=n===2?'on':''}
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+
+/* الطلبات */
+async function loadOrders(){
+  const {data}=await sb.from('orders').select('*').in('status',['new','preparing']).order('created_at');
+  $('list').innerHTML=data&&data.length?data.map(o=>`<div class="ord ${o.status}">
+    <div class="oh"><b>ترابيزة ${esc(o.table_no)}</b><span>${new Date(o.created_at).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
+    <ul>${o.items.map(x=>`<li style="direction:ltr;text-align:left">${x.qty} × ${esc(x.name)}</li>`).join('')}</ul>
+    <div class="oh"><b>${o.total} ج.م</b>${o.status==='new'?`<button onclick="st(${o.id},'preparing')">بدأ التحضير</button>`:`<button onclick="st(${o.id},'done')">تم التسليم</button>`}</div></div>`).join(''):'<p class="msg">لا توجد طلبات حالياً.</p>';
+}
+async function st(id,s){await sb.from('orders').update({status:s}).eq('id',id);loadOrders()}
+function listen(){
+  if(chan)return;
+  chan=sb.channel('orders').on('postgres_changes',{event:'*',schema:'public',table:'orders'},p=>{if(p.eventType==='INSERT')beep();loadOrders()}).subscribe();
+}
+
+/* المنيو */
+async function loadMenu(){
+  const {data}=await sb.from('menu_items').select('*').order('sort');
+  menu=data||[];
+  if(!menu.length){$('mlist').innerHTML='<p class="msg">المنيو فارغ.</p><button class="main" style="width:100%" onclick="seed()">استيراد المنيو الأساسي</button>';return}
+  const cats=[...new Set(menu.map(i=>i.category))];
+  $('dl').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
+  $('mlist').innerHTML=cats.map(c=>`<h3>${esc(c)}</h3>`+menu.filter(i=>i.category===c).map(i=>`<div class="mr">
+    <input value="${esc(i.name)}" onchange="up(${i.id},{name:this.value})">
+    <input type="number" value="${i.price}" onchange="up(${i.id},{price:+this.value})">
+    <label><input type="checkbox" ${i.available?'checked':''} onchange="up(${i.id},{available:this.checked})"> متاح</label>
+    <button onclick="del(${i.id})">حذف</button></div>`).join('')).join('');
+}
+async function up(id,p){const {error}=await sb.from('menu_items').update(p).eq('id',id);toast(error?'لم يُحفظ، حاول مرة أخرى':'تم الحفظ')}
+async function del(id){if(!confirm('حذف الصنف؟'))return;await sb.from('menu_items').delete().eq('id',id);loadMenu()}
+$('addf').onsubmit=async e=>{
+  e.preventDefault();
+  const sort=menu.reduce((m,i)=>Math.max(m,i.sort),0)+1;
+  const {error}=await sb.from('menu_items').insert({category:$('ac').value.trim(),name:$('an').value.trim(),price:+$('ap').value,sort});
+  if(error){toast('لم تتم الإضافة');return}
+  $('an').value='';$('ap').value='';toast('تمت الإضافة');loadMenu();
+};
+async function seed(){
+  let n=0;const rows=[];
+  SEED.forEach(([category,list])=>list.forEach(([name,price])=>rows.push({category,name,price,sort:++n})));
+  const {error}=await sb.from('menu_items').insert(rows);
+  toast(error?'فشل الاستيراد':'تم استيراد المنيو');loadMenu();
+}
+start();
+</script>
+</body>
+</html>
