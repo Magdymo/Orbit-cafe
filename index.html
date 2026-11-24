@@ -1,83 +1,100 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Orbit Cafe - Admin</title>
-<style>
-*{box-sizing:border-box;font-family:system-ui,Tahoma,Arial} body{margin:0;background:#F3EFE6;color:#222;padding:16px}
-.top{max-width:720px;margin:0 auto}
-.card{background:#fff;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 8px rgba(0,0,0,.05)}
-h1{font-size:32px;margin:8px 0} h2{color:#0F4C43}
-input,select{width:100%;padding:13px;border:1px solid #E6DFCE;border-radius:12px;margin:6px 0;font-size:16px;background:#fff}
-.btn{background:#0F4C43;color:#fff;border:0;padding:14px;border-radius:12px;width:100%;font-size:18px;font-weight:700;cursor:pointer}
-.btn-red{background:#B42318;color:#fff;border:0;padding:10px 14px;border-radius:10px;cursor:pointer}
-.btn-teal{background:#0F4C43;color:#fff;border:0;padding:10px 14px;border-radius:10px;cursor:pointer}
-.btn-outline{background:#fff;color:#0F4C43;border:2px solid #0F4C43;padding:12px;border-radius:12px;width:100%;font-weight:700;cursor:pointer}
-.tabs{display:flex;gap:10px}.tabs button{flex:1}
-.item{display:flex;gap:12px;align-items:center;background:#fff;border-radius:14px;padding:12px;margin:10px 0}
-.item img{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#F3EFE6}
-.item b{font-size:18px}.price{color:#0F4C43;font-weight:800}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center}
-.modal.open{display:flex}.modal-box{background:#fff;width:100%;max-width:640px;border-radius:20px 20px 0 0;padding:18px;max-height:90vh;overflow:auto}
-.pics{display:flex;gap:8px;flex-wrap:wrap}.pics button{font-size:28px;padding:8px 12px;border:2px solid #eee;border-radius:12px;background:#fff;cursor:pointer}.pics button.sel{border-color:#0F4C43;background:#EAF3F1}
-.badge{background:#EAF3F1;color:#0F4C43;padding:4px 10px;border-radius:20px;font-size:13px}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbit Cafe</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="top">
-<div style="display:flex;justify-content:space-between;align-items:center"><h1>Orbit Cafe</h1><button class="btn-teal" style="width:auto" onclick="alert('تم تسجيل الخروج')">خروج</button></div>
-<div class="tabs"><button class="btn" data-tab="menu" onclick="showTab('menu')">المنيو</button><button class="btn-outline" data-tab="orders" onclick="showTab('orders')">الطلبات</button><button class="btn-outline" data-tab="team" onclick="showTab('team')">الفريق</button></div>
+<div class="rings"></div>
+<header class="top"><h1>ORBIT CAFE</h1><p id="tb"></p></header>
+<nav id="chips" class="chips"></nav>
+<main id="menu"><p class="msg">جاري تحميل المنيو...</p></main>
+<div id="bar" class="bar" hidden><button id="open"></button></div>
 
-<div id="tab-menu">
-<div class="card"><h2 style="margin:0">إضافة صنف جديد</h2>
-<input id="newCat" placeholder="القسم - مثال: Hot Coffee"><input id="newName" placeholder="اسم الصنف"><input id="newPrice" type="number" placeholder="السعر">
-<div class="pics" id="newPics"></div>
-<button class="btn" onclick="addItem()">إضافة</button></div>
-<div id="menuList"></div>
+<div id="sheet" class="sheet" hidden>
+  <div id="cartv">
+    <h2>طلبك</h2>
+    <ul id="lines"></ul>
+    <div class="tot"><span>الإجمالي</span><span id="total"></span></div>
+    <button id="send" class="main">إرسال الطلب</button>
+    <p id="err" class="err"></p>
+    <button id="back" class="ghost">رجوع للمنيو</button>
+  </div>
+  <div id="donev" class="done" hidden>
+    <h2>وصل طلبك</h2>
+    <p id="dmsg"></p>
+    <button id="more" class="main" style="margin-top:24px">طلب إضافي</button>
+  </div>
 </div>
 
-<div id="tab-orders" style="display:none"><div class="card"><b>طلب #1 - Espresso × 2</b><p>الحالة: قيد التحضير - الإجمالي: 140</p></div><div class="card"><b>طلب #2 - Double Espresso × 1</b><p>الحالة: تم - الإجمالي: 95</p></div></div>
-
-<div id="tab-team" style="display:none">
-<div class="card"><h2 style="margin:0">إضافة عضو فريق</h2>
-<input id="newMemberName" placeholder="الاسم"><select id="newMemberRole"><option>باريستا</option><option>كاشير</option><option>مدير</option><option>ويتر</option><option>شيف</option></select><input id="newMemberPhone" placeholder="رقم التليفون"><button class="btn" onclick="addMember()">إضافة للفريق</button></div>
-<div id="teamList"></div>
-</div>
-</div>
-
-<div class="modal" id="modal"><div class="modal-box">
-<h2 id="modalTitle">تعديل</h2>
-<input id="editName" placeholder="اسم الصنف / الاسم"><input id="editPrice" type="number" placeholder="السعر"><input id="editCat" placeholder="القسم / الوظيفة / التليفون">
-<label><input type="checkbox" id="editAvail" checked style="width:auto"> متاح</label>
-<div class="pics" id="editPics"></div>
-<div class="row"><button class="btn" onclick="saveEdit()">حفظ التعديل</button><button class="btn-outline" onclick="closeModal()">إلغاء</button></div>
-</div></div>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
 <script>
-const EMOJIS=['☕','🥤','🍵','🧋','🍰','🍩'];
-let items=JSON.parse(localStorage.getItem('orbit_menu')||'null')||[{id:1,name:'Espresso',price:70,cat:'Hot Coffee',emoji:'☕',avail:true},{id:2,name:'Double Espresso',price:95,cat:'Hot Coffee',emoji:'☕',avail:true}];
-let team=JSON.parse(localStorage.getItem('orbit_team')||'null')||[{id:1,name:'أحمد',role:'باريستا',phone:'01000000000',emoji:'👨‍🍳'},{id:2,name:'سارة',role:'كاشير',phone:'01100000000',emoji:'👩‍💼'}];
-let selEmoji='☕', editEmoji='☕', editing=null, editingType='item';
-function save(){localStorage.setItem('orbit_menu',JSON.stringify(items));localStorage.setItem('orbit_team',JSON.stringify(team));render();}
-function renderPics(el,cb){document.getElementById(el).innerHTML=EMOJIS.map(e=>`<button type="button" onclick="cb('${e}',this)">${e}</button>`).join('');}
-renderPics('newPics',(e,btn)=>{selEmoji=e;document.querySelectorAll('#newPics button').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');});
-renderPics('editPics',(e,btn)=>{editEmoji=e;document.querySelectorAll('#editPics button').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');});
-function render(){
- let cats=[...new Set(items.map(i=>i.cat))];
- document.getElementById('menuList').innerHTML=cats.map(c=>`<h2>${c}</h2>`+items.filter(i=>i.cat===c).map(i=>`<div class="item"><div style="font-size:44px">${i.emoji}</div><div style="flex:1"><b>${i.name}</b><div><span class="price">${i.price} ج</span> <span class="badge">${i.avail?'متاح':'غير متاح'}</span></div></div><div class="row"><button class="btn-teal" onclick="openEdit(${i.id},'item')">تعديل</button><button class="btn-red" onclick="delItem(${i.id})">حذف</button></div></div>`).join('')).join('');
- document.getElementById('teamList').innerHTML=team.map(m=>`<div class="item"><div style="font-size:40px">${m.emoji}</div><div style="flex:1"><b>${m.name}</b><div>${m.role} - ${m.phone}</div></div><div class="row"><button class="btn-teal" onclick="openEdit(${m.id},'team')">تعديل</button><button class="btn-red" onclick="delMember(${m.id})">حذف</button></div></div>`).join('');
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let T=new URLSearchParams(location.search).get('table');
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let items=[],cart={};
+
+const DEMO=typeof DEMO_MODE!=='undefined'&&DEMO_MODE;
+if(!T&&DEMO){
+  $('tb').innerHTML='وضع التجربة · ترابيزة رقم <select id="tsel">'+[1,2,3,4,5,6,7,8,9,10].map(n=>`<option>${n}</option>`).join('')+'</select>';
+  T='1';$('tsel').onchange=e=>{T=e.target.value};
+}else $('tb').textContent=T?'ترابيزة رقم '+T:'افتح الصفحة من باركود الترابيزة لإرسال طلبك';
+
+async function init(){
+  const {data,error}=await sb.from('menu_items').select('*').eq('available',true).order('sort');
+  if(error){$('menu').innerHTML='<p class="msg">تعذر تحميل المنيو. حدّث الصفحة.</p>';return}
+  items=data;render();
 }
-function showTab(t){['menu','orders','team'].forEach(x=>document.getElementById('tab-'+x).style.display=x===t?'block':'none');document.querySelectorAll('.tabs button').forEach(b=>{b.className=b.dataset.tab===t?'btn':'btn-outline'});}
-function addItem(){let n=document.getElementById('newName').value.trim(),p=Number(document.getElementById('newPrice').value),c=document.getElementById('newCat').value.trim()||'Hot Coffee';if(!n||!p)return alert('اكتب الاسم والسعر');items.push({id:Date.now(),name:n,price:p,cat:c,emoji:selEmoji,avail:true});save();document.getElementById('newName').value='';document.getElementById('newPrice').value='';}
-function delItem(id){if(confirm('تحذف الصنف ده؟')){items=items.filter(i=>i.id!==id);save();}}
-function addMember(){let n=document.getElementById('newMemberName').value.trim(),r=document.getElementById('newMemberRole').value,ph=document.getElementById('newMemberPhone').value.trim();if(!n)return alert('اكتب الاسم');team.push({id:Date.now(),name:n,role:r,phone:ph,emoji:'🧑‍🍳'});save();document.getElementById('newMemberName').value='';}
-function delMember(id){if(confirm('تحذف العضو ده؟')){team=team.filter(m=>m.id!==id);save();}}
-function openEdit(id,type){editing=id;editingType=type;let o=type==='item'?items.find(i=>i.id===id):team.find(m=>m.id===id);document.getElementById('modalTitle').innerText=type==='item'?'تعديل صنف':'تعديل عضو فريق';document.getElementById('editName').value=o.name;document.getElementById('editPrice').value=type==='item'?o.price:o.phone;document.getElementById('editCat').value=type==='item'?o.cat:o.role;document.getElementById('editAvail').checked=o.avail!==false;editEmoji=o.emoji;document.getElementById('modal').classList.add('open');}
-function closeModal(){document.getElementById('modal').classList.remove('open');}
-function saveEdit(){let n=document.getElementById('editName').value.trim(),p=document.getElementById('editPrice').value,c=document.getElementById('editCat').value.trim();if(editingType==='item'){let o=items.find(i=>i.id===editing);o.name=n;o.price=Number(p);o.cat=c||o.cat;o.avail=document.getElementById('editAvail').checked;o.emoji=editEmoji;}else{let o=team.find(m=>m.id===editing);o.name=n;o.phone=p;o.role=c;o.emoji=editEmoji;}save();closeModal();}
-render();
+function row(i){
+  const q=cart[i.id]||0;
+  return `<div class="it" data-id="${i.id}">${i.image_url?`<img src="${esc(i.image_url)}" alt="">`:''}
+  <div class="nm">${esc(i.name)}<b>${i.price} ج.م</b></div>
+  <div class="qty">${q?`<button aria-label="إنقاص" onclick="chg(${i.id},-1)">−</button><span>${q}</span>`:''}<button aria-label="إضافة" onclick="chg(${i.id},1)">+</button></div></div>`;
+}
+function render(){
+  const cats=[...new Set(items.map(i=>i.category))];
+  $('chips').innerHTML=cats.map((c,k)=>`<a href="#c${k}">${esc(c)}</a>`).join('');
+  $('menu').innerHTML=cats.map((c,k)=>`<section id="c${k}"><h2 style="direction:ltr;text-align:left">${esc(c)}</h2>${items.filter(i=>i.category===c).map(row).join('')}</section>`).join('');
+  bar();
+}
+function chg(id,d){
+  cart[id]=Math.max(0,(cart[id]||0)+d);
+  const it=items.find(i=>i.id===id),el=document.querySelector(`[data-id="${id}"]`);
+  if(el)el.outerHTML=row(it);
+  bar();
+}
+function lines(){return items.filter(i=>cart[i.id]).map(i=>({name:i.name,price:i.price,qty:cart[i.id]}))}
+function sum(l){return l.reduce((a,x)=>a+x.qty*x.price,0)}
+function bar(){
+  const l=lines(),n=l.reduce((a,x)=>a+x.qty,0);
+  $('bar').hidden=!n;
+  $('open').textContent=`مراجعة الطلب (${n}) · ${sum(l)} ج.م`;
+}
+$('open').onclick=()=>{
+  const l=lines();
+  $('lines').innerHTML=l.map(x=>`<li><span style="direction:ltr">${x.qty} × ${esc(x.name)}</span><span>${x.qty*x.price} ج.م</span></li>`).join('');
+  $('total').textContent=sum(l)+' ج.م';
+  $('err').textContent='';$('send').disabled=!T;
+  if(!T)$('err').textContent='لا يمكن الإرسال بدون رقم الترابيزة. امسح باركود الترابيزة.';
+  $('cartv').hidden=false;$('donev').hidden=true;$('sheet').hidden=false;
+};
+$('back').onclick=()=>{$('sheet').hidden=true};
+$('send').onclick=async()=>{
+  const l=lines();if(!l.length||!T)return;
+  $('send').disabled=true;
+  const {error}=await sb.from('orders').insert({table_no:T,items:l,total:sum(l)});
+  if(error){$('send').disabled=false;$('err').textContent='لم يصل الطلب. حاول مرة أخرى.';return}
+  cart={};render();
+  $('dmsg').textContent='ترابيزة '+T+' · هيوصلك قريباً';
+  $('cartv').hidden=true;$('donev').hidden=false;
+};
+$('more').onclick=()=>{$('sheet').hidden=true};
+init();
 </script>
 </body>
 </html>
