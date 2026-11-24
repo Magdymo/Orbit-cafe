@@ -63,3 +63,6 @@ h3{margin:16px 0 6px;color:var(--deep)}
 .fl{display:grid;gap:4px;font-weight:700}
 .fl input{padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
 .ep{width:100%;max-height:220px;object-fit:cover;border-radius:14px}
+.hint{font-size:13px;opacity:.85;margin:6px 0}
+.add select{padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;font:inherit}
+.ord small{display:block;opacity:.8}

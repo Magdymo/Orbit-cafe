@@ -21,9 +21,11 @@
 
 <div id="app" class="wrap" hidden>
   <div class="oh"><h2>Orbit Cafe</h2><button id="out">خروج</button></div>
+  <p id="who" class="hint"></p>
   <div class="tabs">
     <button id="t1" class="on">الطلبات</button>
-    <button id="t2">المنيو</button>
+    <button id="t2" hidden>المنيو</button>
+    <button id="t3" hidden>الفريق</button>
   </div>
   <div id="pOrders"><div id="list"></div></div>
   <div id="pMenu" hidden>
@@ -35,6 +37,16 @@
     </form>
     <datalist id="dl"></datalist>
     <div id="mlist"></div>
+  </div>
+  <div id="pTeam" hidden>
+    <p class="hint">لإضافة موظف: أنشئ حسابه أولاً من Supabase (Authentication ← Users ← Add user مع تفعيل Auto Confirm User)، ثم أضف بريده هنا.</p>
+    <form id="tf" class="add" style="grid-template-columns:1fr 1fr">
+      <input id="tn" placeholder="اسم الموظف" required>
+      <input id="te" type="email" placeholder="البريد الإلكتروني" required style="direction:ltr">
+      <select id="tr"><option value="staff">موظف (الطلبات فقط)</option><option value="owner">مدير (كل الصلاحيات)</option></select>
+      <button>إضافة</button>
+    </form>
+    <div id="tlist"></div>
   </div>
 </div>
 
@@ -60,15 +72,26 @@
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let ac,menu=[],chan;
+let ac,menu=[],chan,me=null,team=[];
 document.addEventListener('click',()=>{try{ac=ac||new AudioContext();ac.resume()}catch(e){}});
 function beep(){try{const o=ac.createOscillator();o.connect(ac.destination);o.frequency.value=880;o.start();o.stop(ac.currentTime+.4)}catch(e){}}
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1400)}
 
 async function start(){
   const {data:{session}}=await sb.auth.getSession();
-  $('login').hidden=!!session;$('app').hidden=!session;
-  if(session){loadOrders();loadMenu();listen()}
+  if(!session){$('login').hidden=false;$('app').hidden=true;return}
+  const {data:row,error:se}=await sb.from('staff').select('*').eq('email',session.user.email.toLowerCase()).maybeSingle();
+  if(se||!row){
+    await sb.auth.signOut();$('login').hidden=false;$('app').hidden=true;
+    $('lerr').textContent=se?'تعذر التحقق من الصلاحيات. تأكد من تنفيذ team.sql.':'هذا الحساب غير مضاف إلى فريق العمل.';
+    return;
+  }
+  me=row;$('login').hidden=true;$('app').hidden=false;
+  const own=me.role==='owner';
+  $('who').textContent='أهلاً '+me.name+(own?' · مدير':' · موظف');
+  $('t2').hidden=!own;$('t3').hidden=!own;
+  loadOrders();listen();
+  if(own){loadMenu();loadTeam()}
 }
 $('login').onsubmit=async e=>{
   e.preventDefault();$('lerr').textContent='';
@@ -77,18 +100,21 @@ $('login').onsubmit=async e=>{
   start();
 };
 $('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
-function tab(n){$('pOrders').hidden=n!==1;$('pMenu').hidden=n!==2;$('t1').className=n===1?'on':'';$('t2').className=n===2?'on':''}
-$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+function tab(n){
+  $('pOrders').hidden=n!==1;$('pMenu').hidden=n!==2;$('pTeam').hidden=n!==3;
+  ['t1','t2','t3'].forEach((id,k)=>$(id).className=n===k+1?'on':'');
+}
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);$('t3').onclick=()=>tab(3);
 
 /* الطلبات */
 async function loadOrders(){
   const {data}=await sb.from('orders').select('*').in('status',['new','preparing']).order('created_at');
   $('list').innerHTML=data&&data.length?data.map(o=>`<div class="ord ${o.status}">
     <div class="oh"><b>ترابيزة ${esc(o.table_no)}</b><span>${new Date(o.created_at).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
-    <ul>${o.items.map(x=>`<li style="direction:ltr;text-align:left">${x.qty} × ${esc(x.name)}</li>`).join('')}</ul>
+    <ul>${o.items.map(x=>`<li style="direction:ltr;text-align:left">${x.qty} × ${esc(x.name)}</li>`).join('')}</ul>${o.handled_by?`<small>بواسطة: ${esc(o.handled_by)}</small>`:''}
     <div class="oh"><b>${o.total} ج.م</b>${o.status==='new'?`<button onclick="st(${o.id},'preparing')">بدأ التحضير</button>`:`<button onclick="st(${o.id},'done')">تم التسليم</button>`}</div></div>`).join(''):'<p class="msg">لا توجد طلبات حالياً.</p>';
 }
-async function st(id,s){await sb.from('orders').update({status:s}).eq('id',id);loadOrders()}
+async function st(id,s){await sb.from('orders').update({status:s,handled_by:me.name}).eq('id',id);loadOrders()}
 function listen(){
   if(chan)return;
   chan=sb.channel('orders').on('postgres_changes',{event:'*',schema:'public',table:'orders'},p=>{if(p.eventType==='INSERT')beep();loadOrders()}).subscribe();
@@ -159,6 +185,24 @@ $('ef').onsubmit=async e=>{
   }catch(x){$('eerr').textContent='لم يُحفظ. تأكد من تنفيذ ملف storage.sql ثم حاول مرة أخرى.'}
   $('esave').disabled=false;
 };
+
+/* الفريق */
+async function loadTeam(){
+  const {data}=await sb.from('staff').select('*').order('created_at');
+  team=data||[];
+  $('tlist').innerHTML=team.map((m,i)=>`<div class="mr"><div class="mi" style="direction:rtl;text-align:right"><b>${esc(m.name)}</b><span style="direction:ltr;text-align:right">${esc(m.email)} · ${m.role==='owner'?'مدير':'موظف'}</span></div>${m.email===me.email?'':`<button class="dl" onclick="rmStaff(${i})">حذف</button>`}</div>`).join('');
+}
+$('tf').onsubmit=async e=>{
+  e.preventDefault();
+  const {error}=await sb.from('staff').insert({name:$('tn').value.trim(),email:$('te').value.trim().toLowerCase(),role:$('tr').value});
+  if(error){toast(error.code==='23505'?'البريد مضاف بالفعل':'لم تتم الإضافة');return}
+  $('tn').value='';$('te').value='';toast('تمت الإضافة');loadTeam();
+};
+async function rmStaff(i){
+  const m=team[i];if(!m||!confirm('إزالة '+m.name+' من الفريق؟'))return;
+  const {error}=await sb.from('staff').delete().eq('email',m.email);
+  toast(error?'لم يتم الحذف':'تمت الإزالة');loadTeam();
+}
 
 start();
 </script>
