@@ -50,3 +50,16 @@ h3{margin:16px 0 6px;color:var(--deep)}
 @media (max-width:520px){.mr{grid-template-columns:1fr 70px}.add{grid-template-columns:1fr 1fr}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 .top select{font:inherit;padding:2px 8px;border-radius:8px;border:0;color:var(--ink)}
+/* إصلاح: الإخفاء بخاصية hidden يعمل دائماً */
+[hidden]{display:none!important}
+/* صف الصنف في الإدارة + نافذة التعديل */
+.mr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border-radius:12px;padding:8px;margin-bottom:6px}
+.mr .th{width:52px;height:52px;border-radius:10px;object-fit:cover;flex:none;background:var(--soft);display:grid;place-items:center;font-size:22px}
+.mr .mi{flex:1;min-width:120px;display:flex;flex-direction:column;direction:ltr;text-align:left}
+.mr .mi span{color:var(--deep);font-size:14px}
+.mr button{background:var(--deep);padding:6px 12px}
+.mr button.dl{background:#b3261e}
+.ef{max-width:520px;margin:0 auto;display:grid;gap:10px}
+.fl{display:grid;gap:4px;font-weight:700}
+.fl input{padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+.ep{width:100%;max-height:220px;object-fit:cover;border-radius:14px}

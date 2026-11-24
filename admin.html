@@ -38,6 +38,21 @@
   </div>
 </div>
 
+<div id="editm" class="sheet" hidden>
+  <form id="ef" class="ef">
+    <h2>تعديل الصنف</h2>
+    <img id="ep" class="ep" alt="" hidden>
+    <label class="fl">الصورة<input id="ei" type="file" accept="image/*"></label>
+    <button type="button" id="erm" class="ghost" style="margin:0">إزالة الصورة</button>
+    <label class="fl">الاسم<input id="en" required></label>
+    <label class="fl">القسم<input id="ec" list="dl" required></label>
+    <label class="fl">السعر<input id="epr" type="number" min="0" required></label>
+    <button id="esave" class="main">حفظ</button>
+    <button type="button" id="ecancel" class="ghost" style="margin:0">إلغاء</button>
+    <p id="eerr" class="err"></p>
+  </form>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="menu-seed.js"></script>
@@ -87,10 +102,11 @@ async function loadMenu(){
   const cats=[...new Set(menu.map(i=>i.category))];
   $('dl').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
   $('mlist').innerHTML=cats.map(c=>`<h3>${esc(c)}</h3>`+menu.filter(i=>i.category===c).map(i=>`<div class="mr">
-    <input value="${esc(i.name)}" onchange="up(${i.id},{name:this.value})">
-    <input type="number" value="${i.price}" onchange="up(${i.id},{price:+this.value})">
+    ${i.image_url?`<img class="th" src="${esc(i.image_url)}" alt="">`:'<div class="th">🖼</div>'}
+    <div class="mi"><b>${esc(i.name)}</b><span>${i.price} ج.م</span></div>
     <label><input type="checkbox" ${i.available?'checked':''} onchange="up(${i.id},{available:this.checked})"> متاح</label>
-    <button onclick="del(${i.id})">حذف</button></div>`).join('')).join('');
+    <button onclick="edit(${i.id})">تعديل</button>
+    <button class="dl" onclick="del(${i.id})">حذف</button></div>`).join('')).join('');
 }
 async function up(id,p){const {error}=await sb.from('menu_items').update(p).eq('id',id);toast(error?'لم يُحفظ، حاول مرة أخرى':'تم الحفظ')}
 async function del(id){if(!confirm('حذف الصنف؟'))return;await sb.from('menu_items').delete().eq('id',id);loadMenu()}
@@ -107,6 +123,43 @@ async function seed(){
   const {error}=await sb.from('menu_items').insert(rows);
   toast(error?'فشل الاستيراد':'تم استيراد المنيو');loadMenu();
 }
+/* تعديل صنف + صورة */
+let cur=null,file=null,rm=false;
+function showPrev(u){$('ep').hidden=!u;if(u)$('ep').src=u}
+function edit(id){
+  cur=menu.find(i=>i.id===id);file=null;rm=false;
+  $('en').value=cur.name;$('ec').value=cur.category;$('epr').value=cur.price;$('ei').value='';
+  showPrev(cur.image_url);$('eerr').textContent='';$('editm').hidden=false;
+}
+$('ei').onchange=e=>{file=e.target.files[0]||null;rm=false;if(file)showPrev(URL.createObjectURL(file))};
+$('erm').onclick=()=>{file=null;rm=true;$('ei').value='';showPrev('')};
+$('ecancel').onclick=()=>{$('editm').hidden=true};
+function shrink(f){return new Promise((ok,no)=>{
+  const im=new Image(),u=URL.createObjectURL(f);
+  im.onload=()=>{const r=Math.min(1,700/Math.max(im.width,im.height)),c=document.createElement('canvas');
+    c.width=Math.round(im.width*r);c.height=Math.round(im.height*r);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+    c.toBlob(b=>b?ok(b):no(),'image/jpeg',.82)};
+  im.onerror=no;im.src=u})}
+function oldPath(u){const m=u&&u.split('/menu-images/')[1];return m||null}
+$('ef').onsubmit=async e=>{
+  e.preventDefault();$('esave').disabled=true;$('eerr').textContent='';
+  try{
+    const p={name:$('en').value.trim(),category:$('ec').value.trim(),price:+$('epr').value};
+    if(file){
+      const b=await shrink(file),path=cur.id+'-'+Date.now()+'.jpg';
+      const {error:ue}=await sb.storage.from('menu-images').upload(path,b,{contentType:'image/jpeg'});
+      if(ue)throw ue;
+      p.image_url=sb.storage.from('menu-images').getPublicUrl(path).data.publicUrl;
+    }else if(rm)p.image_url=null;
+    const {error}=await sb.from('menu_items').update(p).eq('id',cur.id);
+    if(error)throw error;
+    if((file||rm)&&oldPath(cur.image_url))sb.storage.from('menu-images').remove([oldPath(cur.image_url)]);
+    $('editm').hidden=true;toast('تم الحفظ');loadMenu();
+  }catch(x){$('eerr').textContent='لم يُحفظ. تأكد من تنفيذ ملف storage.sql ثم حاول مرة أخرى.'}
+  $('esave').disabled=false;
+};
+
 start();
 </script>
 </body>
