@@ -26,8 +26,9 @@
     <button id="t1" class="on">الطلبات</button>
     <button id="t2" hidden>المنيو</button>
     <button id="t3" hidden>الفريق</button>
+    <button id="t4" hidden>الإعدادات</button>
   </div>
-  <div id="pOrders"><div id="list"></div></div>
+  <div id="pOrders"><div id="list"></div><h3 id="doneh" hidden>تم التسليم اليوم</h3><div id="dlist"></div></div>
   <div id="pMenu" hidden>
     <form id="addf" class="add">
       <input id="ac" list="dl" placeholder="القسم" required>
@@ -43,12 +44,24 @@
     <form id="tf" class="add" style="grid-template-columns:1fr 1fr">
       <input id="tn" placeholder="اسم الموظف" required>
       <input id="te" type="email" placeholder="البريد الإلكتروني" required style="direction:ltr">
-      <select id="tr"><option value="staff">موظف (الطلبات فقط)</option><option value="owner">مدير (كل الصلاحيات)</option></select>
+      <select id="tr"><option value="staff">موظف (الطلبات فقط)</option><option value="cashier">كاشير (الطلبات + طباعة الفواتير)</option><option value="owner">مدير (كل الصلاحيات)</option></select>
       <button>إضافة</button>
     </form>
     <div id="tlist"></div>
   </div>
+  <div id="pSet" hidden>
+    <form id="sf" class="ef" style="margin-top:10px">
+      <p class="hint">الضريبة تظهر للعميل في مراجعة الطلب وتُضاف على كل طلب جديد. تعديلها أو حذفها لا يغيّر الطلبات السابقة.</p>
+      <label class="fl">اسم الضريبة<input id="sn" placeholder="مثال: ضريبة القيمة المضافة" required></label>
+      <label class="fl">النسبة %<input id="sr" type="number" min="0" max="100" step="0.01" required></label>
+      <label class="fl" style="display:flex;gap:8px;align-items:center"><input id="se" type="checkbox" style="width:auto"> تفعيل الضريبة</label>
+      <button class="main" id="ssave">حفظ</button>
+      <button type="button" id="sdel" class="ghost" style="margin:0;color:#b3261e">حذف الضريبة</button>
+    </form>
+  </div>
 </div>
+
+<div id="inv"></div>
 
 <div id="editm" class="sheet" hidden>
   <form id="ef" class="ef">
@@ -72,7 +85,10 @@
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let ac,menu=[],chan,me=null,team=[];
+let ac,menu=[],chan,me=null,team=[],orders=[];
+const RL={owner:'مدير',cashier:'كاشير',staff:'موظف'};
+const CAFE='Orbit Cafe';
+const money=n=>(+n).toFixed(2).replace(/\.00$/,'');
 document.addEventListener('click',()=>{try{ac=ac||new AudioContext();ac.resume()}catch(e){}});
 function beep(){try{const o=ac.createOscillator();o.connect(ac.destination);o.frequency.value=880;o.start();o.stop(ac.currentTime+.4)}catch(e){}}
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1400)}
@@ -88,10 +104,10 @@ async function start(){
   }
   me=row;$('login').hidden=true;$('app').hidden=false;
   const own=me.role==='owner';
-  $('who').textContent='أهلاً '+me.name+(own?' · مدير':' · موظف');
-  $('t2').hidden=!own;$('t3').hidden=!own;
+  $('who').textContent='أهلاً '+me.name+' · '+(RL[me.role]||me.role);
+  $('t2').hidden=!own;$('t3').hidden=!own;$('t4').hidden=!own;
   loadOrders();listen();
-  if(own){loadMenu();loadTeam()}
+  if(own){loadMenu();loadTeam();loadSettings()}
 }
 $('login').onsubmit=async e=>{
   e.preventDefault();$('lerr').textContent='';
@@ -101,18 +117,41 @@ $('login').onsubmit=async e=>{
 };
 $('out').onclick=async()=>{await sb.auth.signOut();location.reload()};
 function tab(n){
-  $('pOrders').hidden=n!==1;$('pMenu').hidden=n!==2;$('pTeam').hidden=n!==3;
-  ['t1','t2','t3'].forEach((id,k)=>$(id).className=n===k+1?'on':'');
+  $('pOrders').hidden=n!==1;$('pMenu').hidden=n!==2;$('pTeam').hidden=n!==3;$('pSet').hidden=n!==4;
+  ['t1','t2','t3','t4'].forEach((id,k)=>$(id).className=n===k+1?'on':'');
 }
-$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);$('t3').onclick=()=>tab(3);
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);$('t3').onclick=()=>tab(3);$('t4').onclick=()=>tab(4);
 
 /* الطلبات */
-async function loadOrders(){
-  const {data}=await sb.from('orders').select('*').in('status',['new','preparing']).order('created_at');
-  $('list').innerHTML=data&&data.length?data.map(o=>`<div class="ord ${o.status}">
+function card(o){
+  const pr=me.role!=='staff'?`<button onclick="printInv(${o.id})">طباعة فاتورة</button>`:'';
+  const act=o.status==='new'?`<button onclick="st(${o.id},'preparing')">بدأ التحضير</button>`:o.status==='preparing'?`<button onclick="st(${o.id},'done')">تم التسليم</button>`:'';
+  return `<div class="ord ${o.status}">
     <div class="oh"><b>ترابيزة ${esc(o.table_no)}</b><span>${new Date(o.created_at).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</span></div>
     <ul>${o.items.map(x=>`<li style="direction:ltr;text-align:left">${x.qty} × ${esc(x.name)}</li>`).join('')}</ul>${o.handled_by?`<small>بواسطة: ${esc(o.handled_by)}</small>`:''}
-    <div class="oh"><b>${o.total} ج.م</b>${o.status==='new'?`<button onclick="st(${o.id},'preparing')">بدأ التحضير</button>`:`<button onclick="st(${o.id},'done')">تم التسليم</button>`}</div></div>`).join(''):'<p class="msg">لا توجد طلبات حالياً.</p>';
+    ${+o.tax_amount>0?`<small>المجموع ${money(o.subtotal)} + ${esc(o.tax_name||'ضريبة')} ${money(o.tax_rate)}% = ${money(o.tax_amount)} ج.م</small>`:''}
+    <div class="oh"><b>${money(o.total)} ج.م</b><span class="bt">${pr}${act}</span></div></div>`;
+}
+async function loadOrders(){
+  const d0=new Date();d0.setHours(0,0,0,0);
+  const [a,b]=await Promise.all([
+    sb.from('orders').select('*').in('status',['new','preparing']).order('created_at'),
+    sb.from('orders').select('*').eq('status','done').gte('created_at',d0.toISOString()).order('created_at',{ascending:false}).limit(50)
+  ]);
+  const cur=a.data||[],dn=b.data||[];orders=[...cur,...dn];
+  $('list').innerHTML=cur.length?cur.map(card).join(''):'<p class="msg">لا توجد طلبات حالياً.</p>';
+  $('doneh').hidden=!dn.length;$('dlist').innerHTML=dn.map(card).join('');
+}
+function printInv(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  const sub=o.subtotal!=null?+o.subtotal:o.items.reduce((t,x)=>t+x.qty*x.price,0),tax=+o.tax_amount||0,d=new Date(o.created_at);
+  $('inv').innerHTML=`<div class="iv"><h2>${esc(CAFE)}</h2><p>فاتورة رقم ${o.id}</p>
+    <p>${d.toLocaleDateString('ar-EG')} ${d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</p><p>ترابيزة ${esc(o.table_no)}</p><hr>
+    <table>${o.items.map(x=>`<tr><td class="n">${esc(x.name)}</td><td>${x.qty}×${money(x.price)}</td><td class="r">${money(x.qty*x.price)}</td></tr>`).join('')}</table><hr>
+    <div class="ln"><span>المجموع</span><span>${money(sub)}</span></div>
+    ${tax>0?`<div class="ln"><span>${esc(o.tax_name||'ضريبة')} (${money(o.tax_rate)}%)</span><span>${money(tax)}</span></div>`:''}
+    <div class="ln tt"><span>الإجمالي</span><span>${money(o.total)} ج.م</span></div><hr><p>شكراً لزيارتكم</p></div>`;
+  window.print();
 }
 async function st(id,s){await sb.from('orders').update({status:s,handled_by:me.name}).eq('id',id);loadOrders()}
 function listen(){
@@ -190,7 +229,7 @@ $('ef').onsubmit=async e=>{
 async function loadTeam(){
   const {data}=await sb.from('staff').select('*').order('created_at');
   team=data||[];
-  $('tlist').innerHTML=team.map((m,i)=>`<div class="mr"><div class="mi" style="direction:rtl;text-align:right"><b>${esc(m.name)}</b><span style="direction:ltr;text-align:right">${esc(m.email)} · ${m.role==='owner'?'مدير':'موظف'}</span></div>${m.email===me.email?'':`<button class="dl" onclick="rmStaff(${i})">حذف</button>`}</div>`).join('');
+  $('tlist').innerHTML=team.map((m,i)=>`<div class="mr"><div class="mi" style="direction:rtl;text-align:right"><b>${esc(m.name)}</b><span style="direction:ltr;text-align:right">${esc(m.email)} · ${RL[m.role]||m.role}</span></div>${m.email===me.email?'':`<button class="dl" onclick="rmStaff(${i})">حذف</button>`}</div>`).join('');
 }
 $('tf').onsubmit=async e=>{
   e.preventDefault();
@@ -203,6 +242,22 @@ async function rmStaff(i){
   const {error}=await sb.from('staff').delete().eq('email',m.email);
   toast(error?'لم يتم الحذف':'تمت الإزالة');loadTeam();
 }
+
+/* الإعدادات: الضريبة */
+async function loadSettings(){
+  const {data}=await sb.from('settings').select('*').eq('id',1).maybeSingle();
+  $('sn').value=(data&&data.tax_name)||'';$('sr').value=data?data.tax_rate:0;$('se').checked=!!(data&&data.tax_enabled);
+}
+$('sf').onsubmit=async e=>{
+  e.preventDefault();
+  const {error}=await sb.from('settings').update({tax_name:$('sn').value.trim(),tax_rate:+$('sr').value,tax_enabled:$('se').checked}).eq('id',1);
+  toast(error?'لم يُحفظ. تأكد من تنفيذ tax.sql':'تم الحفظ');
+};
+$('sdel').onclick=async()=>{
+  if(!confirm('حذف الضريبة؟ لن تُضاف على الطلبات الجديدة.'))return;
+  const {error}=await sb.from('settings').update({tax_name:'ضريبة',tax_rate:0,tax_enabled:false}).eq('id',1);
+  toast(error?'لم يتم الحذف':'تم حذف الضريبة');loadSettings();
+};
 
 start();
 </script>
