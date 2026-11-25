@@ -66,3 +66,24 @@ h3{margin:16px 0 6px;color:var(--deep)}
 .hint{font-size:13px;opacity:.85;margin:6px 0}
 .add select{padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%;font:inherit}
 .ord small{display:block;opacity:.8}
+/* الضريبة + الفاتورة */
+.sr{display:flex;justify-content:space-between;margin:6px 0;opacity:.9}
+.ord.done{border-color:#999}
+.bt{display:flex;gap:6px;flex-wrap:wrap}
+.ef .main{width:100%;padding:12px}
+#inv{display:none}
+@media print{
+  @page{size:80mm auto;margin:3mm}
+  body>*:not(#inv){display:none!important}
+  body{background:#fff;padding:0}
+  #inv{display:block!important}
+  .iv{width:72mm;margin:0 auto;font:12px/1.5 Cairo,Arial,sans-serif;color:#000;text-align:center}
+  .iv h2{font-size:18px;margin:0 0 4px}
+  .iv hr{border:0;border-top:1px dashed #000;margin:6px 0}
+  .iv table{width:100%;border-collapse:collapse}
+  .iv td{padding:2px 0;vertical-align:top}
+  .iv td.n{direction:ltr;text-align:left}
+  .iv td.r{text-align:left}
+  .iv .ln{display:flex;justify-content:space-between}
+  .iv .tt{font-weight:900;font-size:14px}
+}

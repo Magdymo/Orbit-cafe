@@ -18,6 +18,8 @@
   <div id="cartv">
     <h2>طلبك</h2>
     <ul id="lines"></ul>
+    <div id="subrow" class="sr" hidden><span>المجموع</span><span id="subt"></span></div>
+    <div id="taxrow" class="sr" hidden><span id="taxn"></span><span id="taxv"></span></div>
     <div class="tot"><span>الإجمالي</span><span id="total"></span></div>
     <button id="send" class="main">إرسال الطلب</button>
     <p id="err" class="err"></p>
@@ -37,7 +39,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let T=new URLSearchParams(location.search).get('table');
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let items=[],cart={};
+let items=[],cart={},TAX=null;
 
 const DEMO=typeof DEMO_MODE!=='undefined'&&DEMO_MODE;
 if(!T&&DEMO){
@@ -48,7 +50,9 @@ if(!T&&DEMO){
 async function init(){
   const {data,error}=await sb.from('menu_items').select('*').eq('available',true).order('sort');
   if(error){$('menu').innerHTML='<p class="msg">تعذر تحميل المنيو. حدّث الصفحة.</p>';return}
-  items=data;render();
+  items=data;
+  const {data:st}=await sb.from('settings').select('*').eq('id',1).maybeSingle();TAX=st;
+  render();
 }
 function row(i){
   const q=cart[i.id]||0;
@@ -70,15 +74,20 @@ function chg(id,d){
 }
 function lines(){return items.filter(i=>cart[i.id]).map(i=>({name:i.name,price:i.price,qty:cart[i.id]}))}
 function sum(l){return l.reduce((a,x)=>a+x.qty*x.price,0)}
+const fm=n=>(+n).toFixed(2).replace(/\.00$/,'');
+function calc(l){const sub=sum(l);let tax=0;if(TAX&&TAX.tax_enabled&&+TAX.tax_rate>0)tax=Math.round(sub*TAX.tax_rate)/100;return{sub,tax,total:sub+tax}}
 function bar(){
   const l=lines(),n=l.reduce((a,x)=>a+x.qty,0);
   $('bar').hidden=!n;
-  $('open').textContent=`مراجعة الطلب (${n}) · ${sum(l)} ج.م`;
+  $('open').textContent=`مراجعة الطلب (${n}) · ${fm(calc(l).total)} ج.م`;
 }
 $('open').onclick=()=>{
   const l=lines();
   $('lines').innerHTML=l.map(x=>`<li><span style="direction:ltr">${x.qty} × ${esc(x.name)}</span><span>${x.qty*x.price} ج.م</span></li>`).join('');
-  $('total').textContent=sum(l)+' ج.م';
+  const c=calc(l);$('subrow').hidden=$('taxrow').hidden=!c.tax;
+  $('subt').textContent=fm(c.sub)+' ج.م';
+  if(c.tax){$('taxn').textContent=(TAX.tax_name||'ضريبة')+' ('+fm(TAX.tax_rate)+'%)';$('taxv').textContent=fm(c.tax)+' ج.م'}
+  $('total').textContent=fm(c.total)+' ج.م';
   $('err').textContent='';$('send').disabled=!T;
   if(!T)$('err').textContent='لا يمكن الإرسال بدون رقم الترابيزة. امسح باركود الترابيزة.';
   $('cartv').hidden=false;$('donev').hidden=true;$('sheet').hidden=false;
@@ -87,7 +96,7 @@ $('back').onclick=()=>{$('sheet').hidden=true};
 $('send').onclick=async()=>{
   const l=lines();if(!l.length||!T)return;
   $('send').disabled=true;
-  const {error}=await sb.from('orders').insert({table_no:T,items:l,total:sum(l)});
+  const {error}=await sb.from('orders').insert({table_no:T,items:l,total:calc(l).total});
   if(error){$('send').disabled=false;$('err').textContent='لم يصل الطلب. حاول مرة أخرى.';return}
   cart={};render();
   $('dmsg').textContent='ترابيزة '+T+' · هيوصلك قريباً';
