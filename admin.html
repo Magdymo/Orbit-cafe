@@ -40,12 +40,13 @@
     <div id="mlist"></div>
   </div>
   <div id="pTeam" hidden>
-    <p class="hint">لإضافة موظف: أنشئ حسابه أولاً من Supabase (Authentication ← Users ← Add user مع تفعيل Auto Confirm User)، ثم أضف بريده هنا.</p>
+    <p class="hint">أضف الموظف باسمه وبريده وكلمة مرور تحددها، ثم أعطه البريد وكلمة المرور ليدخل بها من صفحة الإدارة.</p>
     <form id="tf" class="add" style="grid-template-columns:1fr 1fr">
       <input id="tn" placeholder="اسم الموظف" required>
-      <input id="te" type="email" placeholder="البريد الإلكتروني" required style="direction:ltr">
-      <select id="tr"><option value="staff">موظف (الطلبات فقط)</option><option value="cashier">كاشير (الطلبات + طباعة الفواتير)</option><option value="owner">مدير (كل الصلاحيات)</option></select>
-      <button>إضافة</button>
+      <input id="te" type="email" placeholder="بريد الموظف" required autocapitalize="off" style="direction:ltr">
+      <input id="tp" type="text" placeholder="كلمة مرور (6 أحرف على الأقل)" minlength="6" required autocapitalize="off" style="grid-column:1/-1;direction:ltr">
+      <select id="tr"><option value="staff">موظف (الطلبات فقط)</option><option value="cashier">كاشير (الطلبات + الفواتير)</option><option value="owner">مدير (كل الصلاحيات)</option></select>
+      <button>إضافة موظف</button>
     </form>
     <div id="tlist"></div>
   </div>
@@ -91,7 +92,7 @@ const CAFE='Orbit Cafe';
 const money=n=>(+n).toFixed(2).replace(/\.00$/,'');
 document.addEventListener('click',()=>{try{ac=ac||new AudioContext();ac.resume()}catch(e){}});
 function beep(){try{const o=ac.createOscillator();o.connect(ac.destination);o.frequency.value=880;o.start();o.stop(ac.currentTime+.4)}catch(e){}}
-function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),1400)}
+function toast(t,bad){const d=document.createElement('div');d.className='toast';if(bad)d.style.background='#b3261e';d.textContent=t;document.body.append(d);setTimeout(()=>d.remove(),bad?4000:1400)}
 
 async function start(){
   const {data:{session}}=await sb.auth.getSession();
@@ -229,18 +230,36 @@ $('ef').onsubmit=async e=>{
 async function loadTeam(){
   const {data}=await sb.from('staff').select('*').order('created_at');
   team=data||[];
-  $('tlist').innerHTML=team.map((m,i)=>`<div class="mr"><div class="mi" style="direction:rtl;text-align:right"><b>${esc(m.name)}</b><span style="direction:ltr;text-align:right">${esc(m.email)} · ${RL[m.role]||m.role}</span></div>${m.email===me.email?'':`<button class="dl" onclick="rmStaff(${i})">حذف</button>`}</div>`).join('');
+  $('tlist').innerHTML=team.map((m,i)=>`<div class="mr"><div class="mi" style="direction:rtl;text-align:right"><b>${esc(m.name)}</b><span style="direction:ltr;text-align:right">${esc(m.email)} · ${RL[m.role]||m.role}</span></div>${m.email===me.email?'':`<button class="dl" onclick="rmStaff(${i})">إيقاف</button>`}</div>`).join('');
 }
 $('tf').onsubmit=async e=>{
   e.preventDefault();
-  const {error}=await sb.from('staff').insert({name:$('tn').value.trim(),email:$('te').value.trim().toLowerCase(),role:$('tr').value});
-  if(error){toast(error.code==='23505'?'البريد مضاف بالفعل':'لم تتم الإضافة');return}
-  $('tn').value='';$('te').value='';toast('تمت الإضافة');loadTeam();
+  const btn=e.target.querySelector('button');btn.disabled=true;
+  const name=$('tn').value.trim(),email=$('te').value.trim().toLowerCase(),password=$('tp').value,role=$('tr').value;
+  try{
+    // اتصال مؤقت لإنشاء الحساب دون التأثير على جلسة المدير
+    const tmp=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+    const {data,error}=await tmp.auth.signUp({email,password});
+    let existed=false,noSession=false;
+    if(error){
+      if(/already|registered/i.test(error.message))existed=true;
+      else if(/signups? (are )?(not allowed|disabled)/i.test(error.message)){toast('التسجيل مقفل في Supabase. فعّل Allow new users to sign up.',1);return}
+      else{toast('تعذر إنشاء الحساب: '+error.message,1);return}
+    }else if(data.user&&data.user.identities&&data.user.identities.length===0)existed=true;
+    else if(!data.session)noSession=true;
+    const {error:e2}=await sb.from('staff').insert({name,email,role});
+    if(e2){toast(e2.code==='23505'?'هذا البريد مضاف بالفعل في الفريق.':'تعذر إضافة الموظف: '+e2.message,1);return}
+    $('tf').reset();loadTeam();
+    if(noSession)toast('تمت الإضافة، لكن «Confirm email» مفعّل في Supabase فلن يدخل الموظف قبل تأكيد بريده. أوقفه من الإعدادات.',1);
+    else if(existed)toast('تمت إعادة تفعيل الموظف. كلمة مروره القديمة كما هي.');
+    else toast('تمت إضافة الموظف');
+  }finally{btn.disabled=false}
 };
 async function rmStaff(i){
-  const m=team[i];if(!m||!confirm('إزالة '+m.name+' من الفريق؟'))return;
+  const m=team[i];if(!m||!confirm('إيقاف '+m.name+'؟ لن يستطيع رؤية الطلبات.'))return;
   const {error}=await sb.from('staff').delete().eq('email',m.email);
-  toast(error?'لم يتم الحذف':'تمت الإزالة');loadTeam();
+  if(error)toast('تعذر الإيقاف: '+error.message,1);else toast('تم الإيقاف');
+  loadTeam();
 }
 
 /* الإعدادات: الضريبة */
